@@ -38,7 +38,6 @@ public class PMO_RMIHelper {
 
 	public static Remote connect(String url) {
 		try {
-			String[] temp = getRegistry().list();
 			return java.rmi.Naming.lookup(url);
 		} catch (Exception e) {
 			System.err.println("W trakcie pracy metody connect doszlo do wyjatku " + e.toString());

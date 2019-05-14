@@ -76,28 +76,17 @@ public class PMO_Test implements PMO_LogSource {
         String dir = System.getProperty("user.dir");
         log(dir);
         try {
-            rmireg = PMO_ProcessHelper.create("/Library/Java/JavaVirtualMachines/jdk-11.0.2.jdk/Contents/Home/bin/rmiregistry");
+            rmireg = PMO_ProcessHelper.create("rmiregistry");
         } catch (IOException e) {
             fail("Internal error - nie udało się uruchomić rmiregistry");
         }
         PMO_TimeHelper.sleep(2000);
-        try {
-            execService = PMO_ProcessHelper.create("java", "Start");
-        } catch (IOException e) {
-            fail("Nie udało się wykonać java Start");
-        }
-        PMO_TimeHelper.sleep(2000);
-//        String line;
-//        StringBuilder stringBuilder = new StringBuilder();
-//
-//        try (BufferedReader bufferedReader = new BufferedReader(new InputStreamReader((execService).getErrorStream()))) {
-//            while ((line = bufferedReader.readLine()) != null) {
-//                stringBuilder.append(line);
-//            }
+//        try {
+//            execService = PMO_ProcessHelper.create("java", "Start");
 //        } catch (IOException e) {
-//            e.printStackTrace();
+//            fail("Nie udało się wykonać java Start");
 //        }
-
+        PMO_TimeHelper.sleep(2000);
         Remote remote = PMO_RMIHelper.connect("TaskDispatcher");
         assertNotNull(remote, "Nie udało się podłączyć do serwisu TaskDispatcher");
 

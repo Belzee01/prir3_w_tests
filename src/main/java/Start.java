@@ -11,7 +11,7 @@ public class Start extends UnicastRemoteObject implements TaskDispatcherInterfac
 
     public static void main(String[] args) {
         boolean connected = false;
-        while(!connected) {
+        while (!connected) {
             try {
                 Registry registry = LocateRegistry.getRegistry();
 
@@ -41,7 +41,7 @@ public class Start extends UnicastRemoteObject implements TaskDispatcherInterfac
     @Override
     public void setReceiverServiceName(String name) {
         System.out.println("Setting the receiver name to: " + name);
-        receiver = (ReceiverInterface) Helper.connect("rmi://localhost/" + name);
+        receiver = (ReceiverInterface) Helper.connect(name);
     }
 
     @Override
@@ -77,7 +77,7 @@ public class Start extends UnicastRemoteObject implements TaskDispatcherInterfac
 
         public Worker(String serviceName, ReceiverInterface receiver) throws RemoteException {
             this.receiver = receiver;
-            this.es = (ExecutorServiceInterface) Helper.connect("rmi://localhost/" + serviceName);
+            this.es = (ExecutorServiceInterface) Helper.connect(serviceName);
 
             executorService = new ThreadPoolExecutor(
                     es.numberOfTasksAllowed(),
@@ -99,12 +99,12 @@ public class Start extends UnicastRemoteObject implements TaskDispatcherInterfac
             synchronized (this) {
                 Job job = new Job(priority, task, es);
                 Future<Long> future = executorService.submit(job);
-//                    try {
-//                        long result = future.get();
-//                        receiver.result(task.taskID(), result);
-//                    } catch (RemoteException e) {
-//                        e.printStackTrace();
-//                    }
+                try {
+                    long result = future.get();
+                    receiver.result(task.taskID(), result);
+                } catch (RemoteException e) {
+                    e.printStackTrace();
+                }
             }
         }
 
