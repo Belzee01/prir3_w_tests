@@ -9,6 +9,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.PriorityBlockingQueue;
 
 public class Start extends UnicastRemoteObject implements TaskDispatcherInterface {
 
@@ -72,7 +73,7 @@ public class Start extends UnicastRemoteObject implements TaskDispatcherInterfac
     }
 
     class TaskConsumer {
-        private PriorityQueue<TaskPriority> priorityQueue;
+        private PriorityBlockingQueue<TaskPriority> priorityQueue;
         private ExecutorServiceInterface es;
         private ExecutorService service;
 
@@ -81,7 +82,7 @@ public class Start extends UnicastRemoteObject implements TaskDispatcherInterfac
         private final Object lock;
 
         public TaskConsumer(String serviceName) {
-            this.priorityQueue = new PriorityQueue<>((t1, t2) -> Boolean.compare(t1.isPriority(), t2.isPriority()));
+            this.priorityQueue = new PriorityBlockingQueue<>(10, (t1, t2) -> Boolean.compare(t1.isPriority(), t2.isPriority()));
             this.es = (ExecutorServiceInterface) Helper.connect(serviceName);
             try {
                 this.threadPoolSize = this.es.numberOfTasksAllowed();
@@ -91,12 +92,6 @@ public class Start extends UnicastRemoteObject implements TaskDispatcherInterfac
             }
 
             this.lock = new Object();
-        }
-
-        public void add(TaskInterface task, boolean priority) {
-            synchronized (this.lock) {
-                priorityQueue.add(new TaskPriority(task, priority));
-            }
 
             for (int i = 0; i < threadPoolSize; i++) {
                 this.service
@@ -114,6 +109,12 @@ public class Start extends UnicastRemoteObject implements TaskDispatcherInterfac
                                         });
                             }
                         });
+            }
+        }
+
+        public void add(TaskInterface task, boolean priority) {
+            synchronized (this.lock) {
+                priorityQueue.add(new TaskPriority(task, priority));
             }
         }
     }
