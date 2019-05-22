@@ -10,6 +10,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.PriorityBlockingQueue;
+import java.util.stream.Stream;
 
 public class Start extends UnicastRemoteObject implements TaskDispatcherInterface {
 
@@ -75,18 +76,19 @@ public class Start extends UnicastRemoteObject implements TaskDispatcherInterfac
     class TaskConsumer {
         private PriorityBlockingQueue<TaskPriority> priorityQueue;
         private ExecutorServiceInterface es;
-        private ExecutorService service;
 
         private int threadPoolSize;
 
         private final Object lock;
+
+        private Thread[] threadPool;
 
         public TaskConsumer(String serviceName) {
             this.priorityQueue = new PriorityBlockingQueue<>(10, (t1, t2) -> Boolean.compare(t1.isPriority(), t2.isPriority()));
             this.es = (ExecutorServiceInterface) Helper.connect(serviceName);
             try {
                 this.threadPoolSize = this.es.numberOfTasksAllowed();
-                this.service = Executors.newFixedThreadPool(threadPoolSize);
+                this.threadPool = new Thread[this.threadPoolSize];
             } catch (RemoteException e) {
                 e.printStackTrace();
             }
@@ -94,28 +96,29 @@ public class Start extends UnicastRemoteObject implements TaskDispatcherInterfac
             this.lock = new Object();
 
             for (int i = 0; i < threadPoolSize; i++) {
-                this.service
-                        .execute(() -> {
-                            while (true) {
-                                Optional.ofNullable(this.priorityQueue.poll())
-                                        .ifPresent(it -> {
-                                            try {
-                                                long execute = es.execute(it.getTask());
-                                                resultsQueue.add(new TaskResult(it.getTask().taskID(), execute));
-                                            } catch (RemoteException e) {
-                                                e.printStackTrace();
-                                                Thread.currentThread().interrupt();
-                                            }
-                                        });
-                            }
-                        });
+                this.threadPool[i] = new Thread(() -> {
+                    while (true) {
+                        Optional.ofNullable(this.priorityQueue.poll())
+                                .ifPresent(it -> {
+                                    try {
+                                        long execute = es.execute(it.getTask());
+                                        resultsQueue.add(new TaskResult(it.getTask().taskID(), execute));
+                                    } catch (RemoteException e) {
+                                        e.printStackTrace();
+                                        Thread.currentThread().interrupt();
+                                    }
+                                });
+                    }
+                });
             }
+
+            Stream.of(this.threadPool).forEach(Thread::start);
         }
 
         public void add(TaskInterface task, boolean priority) {
-            synchronized (this.lock) {
+//            synchronized (this.lock) {
                 priorityQueue.add(new TaskPriority(task, priority));
-            }
+//            }
         }
     }
 
