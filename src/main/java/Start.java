@@ -2,10 +2,13 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.*;
+import java.util.Optional;
+import java.util.PriorityQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class Start extends UnicastRemoteObject implements TaskDispatcherInterface {
 
@@ -31,152 +34,124 @@ public class Start extends UnicastRemoteObject implements TaskDispatcherInterfac
 
     private ReceiverInterface receiver;
 
-    private Map<String, Worker> consumers;
+    private ConcurrentHashMap<String, TaskConsumer> consumers;
+
+    private LinkedBlockingQueue<TaskResult> resultsQueue;
 
     public Start() throws RemoteException {
         super();
-        this.consumers = new HashMap<>();
+        this.consumers = new ConcurrentHashMap<>();
+        this.resultsQueue = new LinkedBlockingQueue<>();
     }
 
     @Override
     public void setReceiverServiceName(String name) {
         System.out.println("Setting the receiver name to: " + name);
         receiver = (ReceiverInterface) Helper.connect(name);
+
+        new Thread(() -> {
+            while (true) {
+                Optional.ofNullable(this.resultsQueue.poll())
+                        .ifPresent(r -> {
+                            try {
+                                receiver.result(r.getTaskId(), r.getResult());
+                            } catch (RemoteException e) {
+                                e.printStackTrace();
+                            }
+                        });
+            }
+        }).start();
     }
 
     @Override
     public void addTask(TaskInterface task, String executorServiceName, boolean priority) {
         synchronized (this) {
-            if (!consumers.containsKey(executorServiceName)) {
-                Worker worker = null;
-                try {
-                    worker = new Worker(executorServiceName, receiver);
-                } catch (RemoteException e) {
-                    e.printStackTrace();
-                }
-                consumers.put(executorServiceName, worker);
-                try {
-                    consumers.get(executorServiceName).add(task, priority);
-                } catch (ExecutionException | InterruptedException e) {
-                    e.printStackTrace();
-                }
-            } else {
-                try {
-                    consumers.get(executorServiceName).add(task, priority);
-                } catch (ExecutionException | InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
+            this.consumers.putIfAbsent(executorServiceName, new TaskConsumer(executorServiceName));
+            this.consumers.get(executorServiceName).add(task, priority);
         }
     }
 
-    public static class Worker {
+    class TaskConsumer {
+        private PriorityQueue<TaskPriority> priorityQueue;
         private ExecutorServiceInterface es;
-        private ReceiverInterface receiver;
-        private ExecutorService executorService;
+        private ExecutorService service;
 
-        public Worker(String serviceName, ReceiverInterface receiver) throws RemoteException {
-            this.receiver = receiver;
+        private int threadPoolSize;
+
+        private final Object lock;
+
+        public TaskConsumer(String serviceName) {
+            this.priorityQueue = new PriorityQueue<>((t1, t2) -> Boolean.compare(t1.isPriority(), t2.isPriority()));
             this.es = (ExecutorServiceInterface) Helper.connect(serviceName);
+            try {
+                this.threadPoolSize = this.es.numberOfTasksAllowed();
+                this.service = Executors.newFixedThreadPool(threadPoolSize);
+            } catch (RemoteException e) {
+                e.printStackTrace();
+            }
 
-            executorService = new ThreadPoolExecutor(
-                    es.numberOfTasksAllowed(),
-                    es.numberOfTasksAllowed(),
-                    0L, TimeUnit.MILLISECONDS,
-                    new PriorityBlockingQueue<>(
-                            es.numberOfTasksAllowed(),
-                            new PriorityFutureComparator()
-                    )) {
-
-                protected <T> RunnableFuture<T> newTaskFor(Callable<T> callable) {
-                    RunnableFuture<T> newTaskFor = super.newTaskFor(callable);
-                    return new PriorityFuture<T>(newTaskFor, ((Job) callable).getPriority());
-                }
-            };
+            this.lock = new Object();
         }
 
-        public void add(TaskInterface task, boolean priority) throws ExecutionException, InterruptedException {
-            synchronized (this) {
-                Job job = new Job(priority, task, es);
-                Future<Long> future = executorService.submit(job);
-                try {
-                    long result = future.get();
-                    receiver.result(task.taskID(), result);
-                } catch (RemoteException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-
-        class PriorityFuture<T> implements RunnableFuture<T> {
-
-            private RunnableFuture<T> src;
-            private boolean priority;
-
-            public PriorityFuture(RunnableFuture<T> other, boolean priority) {
-                this.src = other;
-                this.priority = priority;
+        public void add(TaskInterface task, boolean priority) {
+            synchronized (this.lock) {
+                priorityQueue.add(new TaskPriority(task, priority));
             }
 
-            public boolean getPriority() {
-                return priority;
-            }
-
-            public boolean cancel(boolean mayInterruptIfRunning) {
-                return src.cancel(mayInterruptIfRunning);
-            }
-
-            public boolean isCancelled() {
-                return src.isCancelled();
-            }
-
-            public boolean isDone() {
-                return src.isDone();
-            }
-
-            public T get() throws InterruptedException, ExecutionException {
-                return src.get();
-            }
-
-            public T get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException {
-                return src.get();
-            }
-
-            public void run() {
-                src.run();
-            }
-        }
-
-        class PriorityFutureComparator implements Comparator<Runnable> {
-            public int compare(Runnable o1, Runnable o2) {
-                boolean p1 = ((PriorityFuture<?>) o1).getPriority();
-                boolean p2 = ((PriorityFuture<?>) o2).getPriority();
-
-                return -1 * Boolean.compare(p1, p2);
-            }
-        }
-
-        class Job implements Callable<Long> {
-            private boolean priority;
-            private ExecutorServiceInterface es;
-            private TaskInterface task;
-
-            public Job(boolean priority, TaskInterface task, ExecutorServiceInterface es) {
-                this.priority = priority;
-                this.es = es;
-                this.task = task;
-            }
-
-            public Long call() throws Exception {
-                System.out.println("Executing: " + priority);
-                return es.execute(task);
-            }
-
-            public boolean getPriority() {
-                return priority;
+            for (int i = 0; i < threadPoolSize; i++) {
+                this.service
+                        .execute(() -> {
+                            while (true) {
+                                Optional.ofNullable(this.priorityQueue.poll())
+                                        .ifPresent(it -> {
+                                            try {
+                                                long execute = es.execute(it.getTask());
+                                                resultsQueue.add(new TaskResult(it.getTask().taskID(), execute));
+                                            } catch (RemoteException e) {
+                                                e.printStackTrace();
+                                                Thread.currentThread().interrupt();
+                                            }
+                                        });
+                            }
+                        });
             }
         }
     }
 
+    class TaskPriority {
+        private TaskInterface task;
+        private boolean priority;
+
+        public TaskPriority(TaskInterface task, boolean priority) {
+            this.task = task;
+            this.priority = priority;
+        }
+
+        public TaskInterface getTask() {
+            return task;
+        }
+
+        public boolean isPriority() {
+            return priority;
+        }
+    }
+
+    class TaskResult {
+        private long taskId;
+        private long result;
+
+        public TaskResult(long taskId, long result) {
+            this.taskId = taskId;
+            this.result = result;
+        }
+
+        public long getTaskId() {
+            return taskId;
+        }
+
+        public long getResult() {
+            return result;
+        }
+    }
 
 }
