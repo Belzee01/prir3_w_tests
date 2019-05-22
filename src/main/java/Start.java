@@ -84,7 +84,7 @@ public class Start extends UnicastRemoteObject implements TaskDispatcherInterfac
         private Thread[] threadPool;
 
         public TaskConsumer(String serviceName) {
-            this.priorityQueue = new PriorityBlockingQueue<>(10, (t1, t2) -> Boolean.compare(t1.isPriority(), t2.isPriority()));
+            this.priorityQueue = new PriorityBlockingQueue<>(10, (t1, t2) -> -1* Boolean.compare(t1.isPriority(), t2.isPriority()));
             this.es = (ExecutorServiceInterface) Helper.connect(serviceName);
             try {
                 this.threadPoolSize = this.es.numberOfTasksAllowed();
