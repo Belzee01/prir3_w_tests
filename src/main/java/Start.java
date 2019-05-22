@@ -56,6 +56,8 @@ public class Start extends UnicastRemoteObject implements TaskDispatcherInterfac
                 Optional.ofNullable(this.resultsQueue.poll())
                         .ifPresent(r -> {
                             try {
+                                receiver = (ReceiverInterface) Helper.connect(name);
+                                System.out.println("Sending result: " + r.getResult() + " for task: " + r.getTaskId());
                                 receiver.result(r.getTaskId(), r.getResult());
                             } catch (RemoteException e) {
                                 e.printStackTrace();
@@ -67,10 +69,8 @@ public class Start extends UnicastRemoteObject implements TaskDispatcherInterfac
 
     @Override
     public void addTask(TaskInterface task, String executorServiceName, boolean priority) {
-        synchronized (this) {
-            this.consumers.putIfAbsent(executorServiceName, new TaskConsumer(executorServiceName));
-            this.consumers.get(executorServiceName).add(task, priority);
-        }
+        this.consumers.putIfAbsent(executorServiceName, new TaskConsumer(executorServiceName));
+        this.consumers.get(executorServiceName).add(task, priority);
     }
 
     class TaskConsumer {
@@ -101,9 +101,15 @@ public class Start extends UnicastRemoteObject implements TaskDispatcherInterfac
                         Optional.ofNullable(this.priorityQueue.poll())
                                 .ifPresent(it -> {
                                     try {
-                                        long execute = es.execute(it.getTask());
-                                        resultsQueue.add(new TaskResult(it.getTask().taskID(), execute));
+                                        ExecutorServiceInterface exec = (ExecutorServiceInterface) Helper.connect(serviceName);
+                                        if (exec != null) {
+                                            System.out.println("Started execution of task: " + it.getTask().taskID() + " with exec: " + serviceName);
+                                            long execute = exec.execute(it.getTask());
+                                            System.out.println("Executed task: " + it.getTask().taskID() + " with exec: " + serviceName);
+                                            resultsQueue.add(new TaskResult(it.getTask().taskID(), execute));
+                                        }
                                     } catch (RemoteException e) {
+                                        System.out.println("Failed with task:"+ it.getTask().taskID()+ " and service " + serviceName);
                                         e.printStackTrace();
                                         Thread.currentThread().interrupt();
                                     }
@@ -117,7 +123,7 @@ public class Start extends UnicastRemoteObject implements TaskDispatcherInterfac
 
         public void add(TaskInterface task, boolean priority) {
 //            synchronized (this.lock) {
-                priorityQueue.add(new TaskPriority(task, priority));
+            priorityQueue.add(new TaskPriority(task, priority));
 //            }
         }
     }
