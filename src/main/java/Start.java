@@ -1,13 +1,8 @@
+import java.rmi.Naming;
 import java.rmi.RemoteException;
-import java.rmi.registry.LocateRegistry;
-import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.Optional;
-import java.util.PriorityQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.stream.Stream;
@@ -15,26 +10,15 @@ import java.util.stream.Stream;
 public class Start extends UnicastRemoteObject implements TaskDispatcherInterface {
 
     public static void main(String[] args) {
-        boolean connected = false;
-        while (!connected) {
-            try {
-                Registry registry = LocateRegistry.getRegistry();
-
-                registry.bind("TaskDispatcher", new Start());
-                System.out.println("Server ready");
-                connected = true;
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
         try {
-            Thread.sleep(1000);
-        } catch (InterruptedException e) {
+            Naming.rebind("TaskDispatcher", new Start());
+            System.out.println("Server ready");
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    private ReceiverInterface receiver;
+    private volatile ReceiverInterface receiver;
 
     private ConcurrentHashMap<String, TaskConsumer> consumers;
 
@@ -43,7 +27,7 @@ public class Start extends UnicastRemoteObject implements TaskDispatcherInterfac
     public Start() throws RemoteException {
         super();
         this.consumers = new ConcurrentHashMap<>();
-        this.resultsQueue = new LinkedBlockingQueue<>();
+        this.resultsQueue = new LinkedBlockingQueue<>(250);
     }
 
     @Override
@@ -53,16 +37,18 @@ public class Start extends UnicastRemoteObject implements TaskDispatcherInterfac
 
         new Thread(() -> {
             while (true) {
-                Optional.ofNullable(this.resultsQueue.poll())
-                        .ifPresent(r -> {
-                            try {
-                                receiver = (ReceiverInterface) Helper.connect(name);
-                                System.out.println("Sending result: " + r.getResult() + " for task: " + r.getTaskId());
-                                receiver.result(r.getTaskId(), r.getResult());
-                            } catch (RemoteException e) {
-                                e.printStackTrace();
-                            }
-                        });
+                synchronized (this) {
+                    Optional.ofNullable(this.resultsQueue.poll())
+                            .ifPresent(r -> {
+                                if (receiver != null) {
+                                    try {
+                                        receiver.result(r.getTaskId(), r.getResult());
+                                    } catch (RemoteException e) {
+                                        e.printStackTrace();
+                                    }
+                                }
+                            });
+                }
             }
         }).start();
     }
@@ -84,7 +70,7 @@ public class Start extends UnicastRemoteObject implements TaskDispatcherInterfac
         private Thread[] threadPool;
 
         public TaskConsumer(String serviceName) {
-            this.priorityQueue = new PriorityBlockingQueue<>(10, (t1, t2) -> -1* Boolean.compare(t1.isPriority(), t2.isPriority()));
+            this.priorityQueue = new PriorityBlockingQueue<>(250, (t1, t2) -> -1 * Boolean.compare(t1.isPriority(), t2.isPriority()));
             this.es = (ExecutorServiceInterface) Helper.connect(serviceName);
             try {
                 this.threadPoolSize = this.es.numberOfTasksAllowed();
@@ -92,39 +78,32 @@ public class Start extends UnicastRemoteObject implements TaskDispatcherInterfac
             } catch (RemoteException e) {
                 e.printStackTrace();
             }
-
             this.lock = new Object();
 
-            for (int i = 0; i < threadPoolSize; i++) {
-                this.threadPool[i] = new Thread(() -> {
+            Stream.of(threadPool).forEach(t -> {
+                t = new Thread(() -> {
                     while (true) {
-                        Optional.ofNullable(this.priorityQueue.poll())
-                                .ifPresent(it -> {
-                                    try {
-                                        ExecutorServiceInterface exec = (ExecutorServiceInterface) Helper.connect(serviceName);
-                                        if (exec != null) {
-                                            System.out.println("Started execution of task: " + it.getTask().taskID() + " with exec: " + serviceName);
-                                            long execute = exec.execute(it.getTask());
-                                            System.out.println("Executed task: " + it.getTask().taskID() + " with exec: " + serviceName);
-                                            resultsQueue.add(new TaskResult(it.getTask().taskID(), execute));
-                                        }
-                                    } catch (RemoteException e) {
-                                        System.out.println("Failed with task:"+ it.getTask().taskID()+ " and service " + serviceName);
-                                        e.printStackTrace();
-                                        Thread.currentThread().interrupt();
-                                    }
-                                });
+                        try {
+                            TaskPriority task = this.priorityQueue.take();
+                            ExecutorServiceInterface exec = (ExecutorServiceInterface) Helper.connect(serviceName);
+                            if (exec != null) {
+                                long execute = exec.execute(task.getTask());
+                                resultsQueue.add(new TaskResult(task.getTask().taskID(), execute));
+                            }
+                        } catch (RemoteException | InterruptedException e) {
+                            e.printStackTrace();
+                            Thread.currentThread().interrupt();
+                        }
                     }
                 });
-            }
-
-            Stream.of(this.threadPool).forEach(Thread::start);
+                t.start();
+            });
         }
 
         public void add(TaskInterface task, boolean priority) {
-//            synchronized (this.lock) {
-            priorityQueue.add(new TaskPriority(task, priority));
-//            }
+            synchronized (this.lock) {
+                priorityQueue.add(new TaskPriority(task, priority));
+            }
         }
     }
 

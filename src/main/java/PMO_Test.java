@@ -1,9 +1,7 @@
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.function.ThrowingSupplier;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.rmi.Remote;
@@ -45,7 +43,7 @@ public class PMO_Test implements PMO_LogSource {
 
     private static void showException(Throwable e, String txt) {
         e.printStackTrace();
-        fail("W trakcie pracy metody " + txt + " doszło do wyjątku " + e.toString());
+        fail("W trakcie pracy metody " + txt + " doszĹo do wyjÄtku " + e.toString());
     }
 
     ////////////////////////////////////////////////////////////////////////////////
@@ -73,22 +71,21 @@ public class PMO_Test implements PMO_LogSource {
 
     @BeforeEach
     public void create() {
-        String dir = System.getProperty("user.dir");
-        log(dir);
         try {
             rmireg = PMO_ProcessHelper.create("rmiregistry");
         } catch (IOException e) {
-            fail("Internal error - nie udało się uruchomić rmiregistry");
+            fail("Internal error - nie udaĹo siÄ uruchomiÄ rmiregistry");
         }
         PMO_TimeHelper.sleep(2000);
         try {
             execService = PMO_ProcessHelper.create("java", "Start");
         } catch (IOException e) {
-            fail("Nie udało się wykonać java Start");
+            fail("Nie udaĹo siÄ wykonaÄ java Start");
         }
         PMO_TimeHelper.sleep(2000);
+
         Remote remote = PMO_RMIHelper.connect("TaskDispatcher");
-        assertNotNull(remote, "Nie udało się podłączyć do serwisu TaskDispatcher");
+        assertNotNull(remote, "Nie udaĹo siÄ podĹÄczyÄ do serwisu TaskDispatcher");
 
         dispatcher = (TaskDispatcherInterface) remote;
 
@@ -130,7 +127,7 @@ public class PMO_Test implements PMO_LogSource {
         log("normalWorkTest");
         // utworzyc wlasne serwisy
 
-        // ES może działać wolniej od receivera, bo przetwarza wiele zadań jednocześnie
+        // ES moĹźe dziaĹaÄ wolniej od receivera, bo przetwarza wiele zadaĹ jednoczeĹnie
         long executorServiceSlowdown = PMO_Consts.NORMAL_WORK_RECEIVER_SLOWDOWN * PMO_Consts.NORMAL_WORK_TASKS_ALLOWED;
 
         long numberOfTasks = PMO_Consts.NORMAL_WORK_TASKS_PER_SENDER * PMO_Consts.NORMAL_WORK_SENDERS_PER_EXECUTOR;
@@ -170,10 +167,10 @@ public class PMO_Test implements PMO_LogSource {
         // uruchomic transfer zadan
         team.start();
 
-        // odczekać na dostarczenie zadań
+        // odczekaÄ na dostarczenie zadaĹ
         PMO_TimeHelper.sleep(2000);
 
-        // odblokować pracę serwisów
+        // odblokowaÄ pracÄ serwisĂłw
         executorBlockade.trigger(true);
 
         PMO_TimeHelper.sleep(requredTimeEstimation);
@@ -186,18 +183,18 @@ public class PMO_Test implements PMO_LogSource {
         exec.test();
         receiver.test();
 
-        // porównać rozwiązania
+        // porĂłwnaÄ rozwiÄzania
 
         Collection<Long> tasksSended = team.getTaskIDs();
         Collection<Long> tasksExecuted = exec.getTaskIDs();
         Collection<Long> tasksReceived = receiver.getTaskIDs();
 
-        assertFalse(repetitionsDetected(tasksExecuted), "Wykryto powtórzenia identyfikatorów przetwarzanych zadań");
-        assertFalse(repetitionsDetected(tasksReceived), "Wykryto powtórzenia identyfikatorów dostarczonych wyników");
+        assertFalse(repetitionsDetected(tasksExecuted), "Wykryto powtĂłrzenia identyfikatorĂłw przetwarzanych zadaĹ");
+        assertFalse(repetitionsDetected(tasksReceived), "Wykryto powtĂłrzenia identyfikatorĂłw dostarczonych wynikĂłw");
         assertTrue(testEquivalence(tasksSended, tasksExecuted),
-                "Wykryto rozbieżność pomiędzy zadaniami wysłanymi a przetworzonymi");
+                "Wykryto rozbieĹźnoĹÄ pomiÄdzy zadaniami wysĹanymi a przetworzonymi");
         assertTrue(testEquivalence(tasksSended, tasksReceived),
-                "Wykryto rozbieżność pomiędzy zadaniami wysłanymi a odebranymi wynikami");
+                "Wykryto rozbieĹźnoĹÄ pomiÄdzy zadaniami wysĹanymi a odebranymi wynikami");
     }
 
     @RepeatedTest(PMO_Consts.TEST_REPETITIONS)
@@ -206,7 +203,7 @@ public class PMO_Test implements PMO_LogSource {
         log("normalWorkTestMultipleExecutors");
         // utworzyc wlasne serwisy
 
-        // ES może działać wolniej od receivera, bo przetwarza wiele zadań jednocześnie
+        // ES moĹźe dziaĹaÄ wolniej od receivera, bo przetwarza wiele zadaĹ jednoczeĹnie
         long executorServiceSlowdown = PMO_Consts.NORMAL_WORK_RECEIVER_SLOWDOWN
                 * PMO_Consts.NORMAL_WORK_MULTIPLE_TASKS_ALLOWED * PMO_Consts.NORMAL_WORK_MULTIPLE_EXECUTORS;
 
@@ -259,10 +256,10 @@ public class PMO_Test implements PMO_LogSource {
         // uruchomic transfer zadan
         team.start();
 
-        // odczekać na dostarczenie zadań
+        // odczekaÄ na dostarczenie zadaĹ
         PMO_TimeHelper.sleep(2000);
 
-        // odblokować pracę serwisów
+        // odblokowaÄ pracÄ serwisĂłw
         executorBlockade.trigger(true);
 
         PMO_TimeHelper.sleep(requredTimeEstimation);
@@ -275,7 +272,7 @@ public class PMO_Test implements PMO_LogSource {
         executors.forEach(e -> e.test());
         receiver.test();
 
-        // porównać rozwiązania
+        // porĂłwnaÄ rozwiÄzania
 
         Collection<Long> tasksSended = team.getTaskIDs();
         Collection<Long> tasksExecuted = new ArrayList<Long>();
@@ -283,12 +280,12 @@ public class PMO_Test implements PMO_LogSource {
 
         executors.forEach(e -> tasksExecuted.addAll(e.getTaskIDs()));
 
-        assertFalse(repetitionsDetected(tasksExecuted), "Wykryto powtórzenia identyfikatorów przetwarzanych zadań");
-        assertFalse(repetitionsDetected(tasksReceived), "Wykryto powtórzenia identyfikatorów dostarczonych wyników");
+        assertFalse(repetitionsDetected(tasksExecuted), "Wykryto powtĂłrzenia identyfikatorĂłw przetwarzanych zadaĹ");
+        assertFalse(repetitionsDetected(tasksReceived), "Wykryto powtĂłrzenia identyfikatorĂłw dostarczonych wynikĂłw");
         assertTrue(testEquivalence(tasksSended, tasksExecuted),
-                "Wykryto rozbieżność pomiędzy zadaniami wysłanymi a przetworzonymi");
+                "Wykryto rozbieĹźnoĹÄ pomiÄdzy zadaniami wysĹanymi a przetworzonymi");
         assertTrue(testEquivalence(tasksSended, tasksReceived),
-                "Wykryto rozbieżność pomiędzy zadaniami wysłanymi a odebranymi wynikami");
+                "Wykryto rozbieĹźnoĹÄ pomiÄdzy zadaniami wysĹanymi a odebranymi wynikami");
     }
 
     @RepeatedTest(PMO_Consts.TEST_REPETITIONS)
@@ -296,7 +293,7 @@ public class PMO_Test implements PMO_LogSource {
         log("idependentTaskExecutionTest");
         // utworzyc wlasne serwisy
 
-        // ES może działać wolniej od receivera, bo przetwarza wiele zadań jednocześnie
+        // ES moĹźe dziaĹaÄ wolniej od receivera, bo przetwarza wiele zadaĹ jednoczeĹnie
         long executorServiceSlowdown = PMO_Consts.NORMAL_WORK_RECEIVER_SLOWDOWN
                 * PMO_Consts.NORMAL_WORK_MULTIPLE_TASKS_ALLOWED * PMO_Consts.NORMAL_WORK_MULTIPLE_EXECUTORS;
 
@@ -349,10 +346,10 @@ public class PMO_Test implements PMO_LogSource {
         // uruchomic transfer zadan
         team.start();
 
-        // odczekać na dostarczenie zadań
+        // odczekaÄ na dostarczenie zadaĹ
         PMO_TimeHelper.sleep(2000);
 
-        // odblokować pracę serwisów
+        // odblokowaÄ pracÄ serwisĂłw
         executorBlockade.trigger(true);
 
         PMO_TimeHelper.sleep(requredTimeEstimation);
@@ -366,8 +363,8 @@ public class PMO_Test implements PMO_LogSource {
         executors.forEach(e -> tasksExecuted.addAll(e.getTaskIDs()));
 
         assertEquals(PMO_Consts.INDEPENDENT_TASK_EXECUTION_RECEIVER_BLOCKADE_AFTER + 1, tasksReceived.size(),
-                "Nie wszystkie wyniki zadań zostały dostarczone");
-        assertTrue(testEquivalence(tasksSended, tasksExecuted), "Nie wszystkie zadania zostały przetworzone");
+                "Nie wszystkie wyniki zadaĹ zostaĹy dostarczone");
+        assertTrue(testEquivalence(tasksSended, tasksExecuted), "Nie wszystkie zadania zostaĹy przetworzone");
     }
 
     @RepeatedTest(PMO_Consts.TEST_REPETITIONS)
@@ -422,10 +419,10 @@ public class PMO_Test implements PMO_LogSource {
         // uruchomic transfer zadan
         team.start();
 
-        // odczekać na dostarczenie zadań
+        // odczekaÄ na dostarczenie zadaĹ
         PMO_TimeHelper.sleep(2000);
 
-        // odblokować pracę serwisów
+        // odblokowaÄ pracÄ serwisĂłw
         executorBlockade.trigger(true);
 
         PMO_TimeHelper.sleep(requredTimeEstimation);
@@ -444,19 +441,19 @@ public class PMO_Test implements PMO_LogSource {
 
         executors.forEach(e -> tasksExecuted.addAll(e.getTaskIDs()));
 
-        assertFalse(repetitionsDetected(tasksExecuted), "Wykryto powtórzenia identyfikatorów przetwarzanych zadań");
-        assertFalse(repetitionsDetected(tasksReceived), "Wykryto powtórzenia identyfikatorów dostarczonych wyników");
+        assertFalse(repetitionsDetected(tasksExecuted), "Wykryto powtĂłrzenia identyfikatorĂłw przetwarzanych zadaĹ");
+        assertFalse(repetitionsDetected(tasksReceived), "Wykryto powtĂłrzenia identyfikatorĂłw dostarczonych wynikĂłw");
         assertTrue(testEquivalence(tasksSended, tasksExecuted),
-                "Wykryto rozbieżność pomiędzy zadaniami wysłanymi a przetworzonymi");
+                "Wykryto rozbieĹźnoĹÄ pomiÄdzy zadaniami wysĹanymi a przetworzonymi");
         assertTrue(testEquivalence(tasksSended, tasksReceived),
-                "Wykryto rozbieżność pomiędzy zadaniami wysłanymi a odebranymi wynikami");
+                "Wykryto rozbieĹźnoĹÄ pomiÄdzy zadaniami wysĹanymi a odebranymi wynikami");
 
     }
 
     private void insertTests(boolean priority) {
         // utworzyc wlasne serwisy
 
-        // ES może działać wolniej od receivera, bo przetwarza wiele zadań jednocześnie
+        // ES moĹźe dziaĹaÄ wolniej od receivera, bo przetwarza wiele zadaĹ jednoczeĹnie
         long executorServiceSlowdown = PMO_Consts.NORMAL_WORK_RECEIVER_SLOWDOWN * PMO_Consts.CONCURRENT_INSERT_EXECUTORS
                 * PMO_Consts.CONCURRENT_INSERT_EXECUTORS;
 
@@ -508,15 +505,15 @@ public class PMO_Test implements PMO_LogSource {
         // uruchomic transfer zadan
         team.start();
 
-        // odczekać na dostarczenie zadań
+        // odczekaÄ na dostarczenie zadaĹ
         PMO_TimeHelper.sleep(2000);
 
-        // przygotować dostarczanie nowych zadań
+        // przygotowaÄ dostarczanie nowych zadaĹ
         for (int i = 0; i < executors.size(); i++) {
             executors.get(i).taskSubmissionTestPrepare(dispatcher, execNames[i], priority);
         }
 
-        // odblokować pracę serwisów
+        // odblokowaÄ pracÄ serwisĂłw
         executorBlockade.trigger(true);
 
         PMO_TimeHelper.sleep(requredTimeEstimation);
