@@ -1,5 +1,7 @@
 import java.rmi.Naming;
 import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -11,7 +13,9 @@ public class Start extends UnicastRemoteObject implements TaskDispatcherInterfac
 
     public static void main(String[] args) {
         try {
-            Naming.rebind("TaskDispatcher", new Start());
+            Registry registry = LocateRegistry.getRegistry(1099);
+
+            registry.bind("TaskDispatcher", new Start());
             System.out.println("Server ready");
         } catch (Exception e) {
             e.printStackTrace();
